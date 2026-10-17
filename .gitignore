@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+env/
+
+# --- IDE / ОС ---
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Секреты (ключи только через переменные окружения) ---
+.env
+.env.*
+*.key
+
+# --- Данные и результаты: большие, генерируются из исходников ---
+data/
+results/
+_old/
+logs/
+
+# --- Отчёт и сгенерированные артефакты ---
+reports/
+*.docx
+*.pdf
+*.xlsx
+
+# --- Прочее ---
+*.log
