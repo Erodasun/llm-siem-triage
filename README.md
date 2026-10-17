@@ -100,3 +100,5 @@ AIT-ADS (`data/raw/ait_ads/`): по 8 сценариям пары логов Waz
 
 Чтобы получить данные: положить AIT-ADS в `data/raw/ait_ads/` (см. §2) и выполнить шаги из раздела 3.
 Ключи задаются только через переменные окружения (`POLZA_API_KEY`, `TOKIFY_API_KEY`) и в репозиторий не попадают.
+
+Дашборд (`results/stage_6/dashboard.html`) собирается командой `python scripts/17_stage6_flask_app.py --static-only` и открывается как один файл без сервера.
