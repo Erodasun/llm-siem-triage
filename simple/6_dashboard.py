@@ -69,6 +69,18 @@ def expert_scores():
     return acc
 
 
+def old_probas(fname):
+    """Вероятность ML, которая стояла в промпте у объяснений прежней версии (как в 4_tandem: новые файлы важнее)."""
+    out = {}
+    for stage in ("stage_10_final", "stage_13_ensemble"):
+        f = OLD / stage / fname
+        if f.exists():
+            d = pd.read_csv(f)
+            for r in d[d["source"] == "ML+LLM"].itertuples():
+                out[int(r.i)] = float(r.ml_proba)
+    return out
+
+
 def load_json(p):
     return json.load(open(p, encoding="utf-8")) if p.exists() else {}
 
@@ -85,6 +97,8 @@ def main():
     pri = levels(p, flag)
     y1 = s1["label"].ne("benign").values
 
+    from src.llm import LLMS as _L
+    OP = {cid: old_probas(_L[fn][2]) for cid, _, fn in LLM}
     alerts = []
     for i, r in s1.iterrows():
         a = {"d": s(r.description), "log": s(r.full_log)[:420], "lab": r.label, "grp": r.group, "sc": r.scenario,
@@ -94,6 +108,8 @@ def main():
             if e.source == "ML+LLM":
                 a["x"][cid] = {"pri": s(e.priority), "sig": s(e.attack_signs), "w": s(e.what_happened),
                                "y": s(e.why_suspicious), "r": s(e.recommendation)}
+                if s(e.get("explanation_from", "")) == "старая версия" and i in OP[cid]:
+                    a["x"][cid]["op"] = round(OP[cid][i], 2)
         alerts.append(a)
 
     acc = expert_scores()

@@ -228,6 +228,7 @@ function renderTriage(){
         det.appendChild(el("div","blk","<b>Что произошло</b>"+hl(x.w)));
         det.appendChild(el("div","blk","<b>Почему подозрительно</b>"+hl(x.y)));
         det.appendChild(el("div","blk","<b>Что делать</b>"+hl(x.r)));
+        if(x.op!=null) det.appendChild(el("div","note","Объяснение получено в предыдущей версии проекта; в промпте была вероятность ML "+f2(x.op)+"."));
       } else {
         var cg=el("div","cmp3");
         D.llm.forEach(function(m){ var z=a.x[m.id]; var col=el("div","cmpc"); if(!z){ col.appendChild(el("div","cmph",m.name)); col.appendChild(el("div","note","объяснение ещё не получено")); cg.appendChild(col); return; }
@@ -236,6 +237,7 @@ function renderTriage(){
           col.appendChild(el("div","blk","<b>Что произошло</b>"+hl(z.w)));
           col.appendChild(el("div","blk","<b>Почему</b>"+hl(z.y)));
           col.appendChild(el("div","blk","<b>Что делать</b>"+hl(z.r)));
+          if(z.op!=null) col.appendChild(el("div","note","в промпте была вероятность ML "+f2(z.op)));
           cg.appendChild(col); });
         det.appendChild(cg);
       }
