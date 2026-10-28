@@ -41,32 +41,20 @@ def levels(p, flag):
 
 
 def expert_scores():
-    """Оценки объяснений (2 эксперта, шкала 0–2): прежняя слепая оценка (48 алертов) + оценка новых объяснений
-    простой версии (simple/results/оценка_новых, алерты 49–54). Возвращает {модель: (сумма, число оценок)}."""
-    R = PROJECT / "reports"
-    N = OUT / "оценка_новых"
-    key, acc = {}, {}
-    for xl, sheet, col in ((R / "judge_v2" / "Оценка_объяснений_слепая_v2.xlsx", "Оценка", 7),
-                           (R / "judge_v3" / "Оценка_объяснений_слепая_v3.xlsx", "Оценка", 7)):
-        if xl.exists():
-            for r in openpyxl.load_workbook(xl)[sheet].iter_rows(min_row=4, values_only=True):
-                if len(r) > col and r[1] in ("A", "B", "C") and isinstance(r[0], (int, float)):
-                    key[(int(r[0]), r[1])] = str(r[col]).split(" (")[0]
-    xl = N / "Оценка_новых_объяснений_слепая.xlsx"
-    if xl.exists():
-        for r in openpyxl.load_workbook(xl)["Ключ"].iter_rows(min_row=2, values_only=True):
-            key[(int(r[0]), r[1])] = {"Claude Opus 5.5": "Claude"}.get(r[2], r[2])
-    files = [R / "judge_v2" / "answers_expert1_part_1.txt", R / "judge_v2" / "answers_expert2_part_1.txt",
-             R / "judge_v3" / "answers_expert1_v3.txt", R / "judge_v3" / "answers_expert2_v3.txt",
-             N / "answers_expert1.txt", N / "answers_expert2.txt"]
-    for f in files:
-        if f.exists():
-            for n, v, a, b, c in re.findall(r"(\d+)\s+([ABCD])\s+([012])\s+([012])\s+([012])", f.read_text(encoding="utf-8")):
-                if (int(n), v) in key:
-                    m = key[(int(n), v)]
-                    sm, cnt = acc.get(m, (0.0, 0))
-                    acc[m] = (sm + (int(a) + int(b) + int(c)) / 3, cnt + 1)
-    return acc
+    """Слепая оценка объяснений (2 эксперта, шкала 0–2, 40 алертов) — simple/results/оценка_объяснений.
+    Возвращает {модель: средний балл}; пока ответов нет — пустой словарь."""
+    N = OUT / "оценка_объяснений"
+    xl = N / "Оценка_объяснений_слепая.xlsx"
+    if not xl.exists():
+        return {}
+    key = {(int(r[0]), r[1]): {"Claude Opus 5.5": "Claude"}.get(r[2], r[2])
+           for r in openpyxl.load_workbook(xl)["Ключ"].iter_rows(min_row=2, values_only=True)}
+    acc = {}
+    for f in sorted(N.glob("answers_expert*.txt")):
+        for n, v, a, b, c in re.findall(r"(\d+)\s+([ABCD])\s+([012])\s+([012])\s+([012])", f.read_text(encoding="utf-8")):
+            if (int(n), v) in key:
+                acc.setdefault(key[(int(n), v)], []).append((int(a) + int(b) + int(c)) / 3)
+    return {m: round(sum(v) / len(v), 2) for m, v in acc.items()}
 
 
 def old_probas(fname):
@@ -112,16 +100,8 @@ def main():
                     a["x"][cid]["op"] = round(OP[cid][i], 2)
         alerts.append(a)
 
-    acc = expert_scores()
-    oe = load_json(PROJECT / "reports" / "judge_gptoss" / "итоги_оценки.json")
-    oq = oe.get("модели", {}).get("gpt-oss-120b (открытая модель)", {}).get("общая")
-    oqc = oe.get("модели", {}).get("GPT-6-sol (контроль)", {}).get("общая")
-    if oq is not None:                        # gpt-oss: отдельная парная оценка (2 эксперта) + оценка новых объяснений
-        sm, cnt = acc.get("gpt-oss-120b", (0.0, 0))
-        n_old = 2 * oe.get("n_alerts", 0)
-        acc["gpt-oss-120b"] = (sm + oq * n_old, cnt + n_old)
-    q = {m: round(sm / cnt, 2) for m, (sm, cnt) in acc.items() if cnt}
-    print("качество объяснений:", q, {m: c for m, (_, c) in acc.items()})
+    q = expert_scores()
+    print("качество объяснений:", q or "ещё не оценено")
     gc_ = load_json(OLD / "stage_13_ensemble" / "gpt_cost.json")
     cm = load_json(OLD / "stage_7" / "claude_polza_measure.json")
     oc = load_json(OLD / "stage_13_ensemble" / "gptoss_cost.json")
@@ -169,7 +149,6 @@ def main():
                     "delay": b["episodes"]["median_delay_s"], "per_hour": b["episodes"]["flagged_per_hour"],
                     "per_hour_all": b["episodes"]["alerts_per_hour"], "dist": round(dist["found"] / dist["attacks"] * 100)},
             "base": {"f1": bl["sample1"]["F1"], "lo": lo, "hi": hi},
-            "gptoss_eval": {"n": oe.get("n_alerts", 0), "q": oq or 0, "ctrl": oqc or 0},
             "llm": llm, "alerts": alerts, "ml": ml, "vs": vs, "abl": abl, "sc": summ["по сетям"]}
     html = TEMPLATE.read_text(encoding="utf-8").replace("/*DATA*/null", json.dumps(data, ensure_ascii=False, default=float))
     (OUT / "dashboard.html").write_text(html, encoding="utf-8")
