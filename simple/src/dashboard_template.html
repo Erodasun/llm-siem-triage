@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Приоритизация алертов SIEM: ML и LLM</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap">
+<style>
+:root{
+  --bg:#E9DEC8; --card:#F5ECDA; --ink:#2E3314; --muted:#625F3C; --faint:#8D8670; --line:#D6C8AA;
+  --acc:#B3365C; --acc-soft:#F4DCD8; --ok:#4F6B12; --ok-soft:#DDE3A0; --bad:#9A2F48; --bad-soft:#F4B9B8;
+  --grey:#A39C80; --band:#EADFC6;
+  --p-low:#DDE3A0; --p-medium:#F4B9B8; --p-high:#E0788A; --p-critical:#7A1F3D;
+  --f-head:'Playfair Display',Georgia,serif; --f-body:'Manrope',system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body)}
+h1,h2,h3{font-family:var(--f-head);font-weight:600}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px}
+h1{font-size:30px;margin:0;line-height:1.1}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-weight:600;padding:8px 14px;border-radius:7px;cursor:pointer}
+.tabs button.on{background:var(--ink);color:var(--bg)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi .v{font-family:var(--f-head);font-size:32px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .v small{font-family:var(--f-body);font-size:14px;font-weight:500;color:var(--muted)}
+.kpi .l{color:var(--muted);font-size:13px;margin-top:4px}
+.kpi.main{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.kpi.main .l,.kpi.main .v small{color:#D9D2B8}
+.row2{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:var(--card);color:var(--ink);font:inherit;padding:7px 14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.llmhead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.llmhead h2,.sec h2{font-size:20px;margin:0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:12px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.on td{background:var(--acc-soft)}
+.queue{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:12px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer}
+input.search{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin:0 0 10px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.list{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.it{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.it:last-child{border-bottom:0}
+.it:hover{background:var(--band)}
+.it.on{background:var(--acc-soft)}
+.it .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px}
+.pri{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 7px;border-radius:5px;flex:none}
+.pri.critical{background:var(--p-critical);color:#fff}.pri.high{background:var(--p-high);color:#fff}
+.pri.medium{background:var(--p-medium);color:var(--ink)}.pri.low{background:var(--p-low);color:var(--ink)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+.det h3{font-size:19px;margin:0 0 6px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;font-size:12px}
+.tag{padding:2px 8px;border-radius:5px;background:var(--band);color:var(--muted)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.blk{margin:10px 0}
+.blk b{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.log{font:12px/1.45 ui-monospace,Consolas,monospace;background:var(--band);border-radius:8px;padding:8px 10px;white-space:pre-wrap;word-break:break-all;color:var(--muted)}
+.probs{display:flex;gap:14px;font-size:13px;color:var(--muted);margin:6px 0 4px}
+.probs span b{color:var(--ink)}
+.note{color:var(--muted);font-size:13px}
+.tw{overflow-x:auto}
+mark{background:#F4D86A;color:inherit;border-radius:3px;padding:0 1px}
+abbr{text-decoration:underline dotted;cursor:help}
+.badge{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.cloud{border-color:var(--ink);color:var(--ink)}
+.pbar{display:flex;gap:3px;margin:0 0 10px;border-radius:8px;overflow:hidden}
+.pbar div{border-radius:0;padding:5px 8px;font-size:12px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.queue.wide{grid-template-columns:minmax(0,3fr) minmax(0,8fr)}
+.cmp3{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:8px}
+.cmpc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.cmph{font-family:var(--f-head);font-weight:600;font-size:16px;margin-bottom:4px}
+@media (max-width:860px){.cmp3{grid-template-columns:1fr}.queue.wide{grid-template-columns:1fr}}
+.sec{margin-bottom:14px}
+.sec p.lead{color:var(--muted);margin:4px 0 12px;font-size:14px}
+.chart .r{display:grid;grid-template-columns:220px 1fr 64px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.chart .r:last-child{border-bottom:0}
+.chart .nm{font-weight:600;font-size:14px}.chart .nm small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.chart .val{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.chart svg{width:100%;height:30px;display:block}
+.chart .ex{grid-column:2 / 4;color:var(--muted);font-size:13px;margin-top:-4px}
+.axis{display:grid;grid-template-columns:220px 1fr 64px;gap:10px;color:var(--faint);font-size:11px}
+.axis div:nth-child(2){display:flex;justify-content:space-between}
+details summary{cursor:pointer;font-weight:600;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary:before{content:"▸ ";color:var(--muted)}
+details[open] summary:before{content:"▾ "}
+th.sort{cursor:pointer}
+.hl td{font-weight:700}
+.legend{display:flex;gap:16px;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+@media (max-width:860px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .queue{grid-template-columns:1fr}
+  .chart .r,.axis{grid-template-columns:120px 1fr 48px}
+  .chart .ex{grid-column:1 / 4}
+  .list{max-height:340px}
+  .seg{display:flex;width:100%}
+  .seg button{flex:1;padding:7px 6px;font-size:13px}
+}
+.part{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;font-family:var(--f-head);font-size:25px;font-weight:600;margin:30px 0 12px;padding:12px 18px;border-radius:14px;background:var(--ink);color:var(--bg)}
+.part:first-child{margin-top:0}
+.part.llm{background:var(--acc)}
+.part small{font-family:var(--f-body);font-size:13px;font-weight:500;opacity:.85}
+.part .pn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--bg);color:var(--ink);font-size:16px}
+.part.llm .pn{color:var(--acc)}
+.chart .nm{font-size:15px!important;font-weight:700!important}
+.chart .nm small{font-size:12.5px!important;color:var(--muted)!important;font-weight:500!important}
+.mbadge{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:8px;background:var(--acc);color:#fff;font-family:var(--f-body);font-size:16px;font-weight:700;vertical-align:3px}
+.chart .nm b.boost{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--ink);color:var(--bg);vertical-align:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Приоритизация алертов SIEM: машинное обучение и LLM</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="t1" class="on" onclick="tab(1)">Триаж</button>
+      <button id="t2" onclick="tab(2)">Сравнение моделей</button>
+    </div>
+  </header>
+
+  <main id="p1"></main>
+  <main id="p2" hidden></main>
+</div>
+
+<script>
+var D = /*DATA*/null;
+var S = {llm:"g", f:"flag", sel:null, sort:"f1", dir:-1, qs:"", cmp:false, vsAll:false, cur:[]};
+function el(t,c,h){var e=document.createElement(t); if(c) e.className=c; if(h!=null) e.innerHTML=h; return e;}
+function f2(x){return x.toFixed(2).replace(".",",");}
+function fr(x){return x<0.1?x.toFixed(3).replace(".",","):f2(x);}
+function fq(x){return x==null?"не оценивалась":f2(x);}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function hl(s){ var e=esc(s), q=S.qs.trim(); if(!q) return e; var re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'); return e.replace(re,function(m){return '<mark>'+m+'</mark>';}); }
+function nn(x){return String(x).replace(/\B(?=(\d{3})+(?!\d))/g," ");}
+var RU = {benign:"фон", network_scans:"сканирование сети", service_scans:"сканирование сервисов", wpscan:"WPScan", dirb:"перебор каталогов",
+  webshell:"веб-оболочка", cracking:"подбор паролей", reverse_shell:"обратная оболочка", privilege_escalation:"повышение привилегий",
+  service_stop:"остановка службы", dnsteal:"вывод данных через DNS"};
+var PRI_RU = {critical:"критичный", high:"высокий", medium:"средний", low:"низкий"};
+var PRI_ORD = {critical:0, high:1, medium:2, low:3};
+
+function tab(n){
+  [1,2].forEach(function(k){ document.getElementById("p"+k).hidden = k!==n; document.getElementById("t"+k).className = k===n?"on":""; });
+  try{ localStorage.setItem("tab", n); }catch(e){}
+}
+
+/* ---------- вкладка 1: триаж ---------- */
+function renderTriage(){
+  var K=D.kpi, p=document.getElementById("p1"); p.innerHTML="";
+  var k=el("div","kpis");
+  k.appendChild(el("div","card kpi main",'<div class="v">'+K.flag+' <small>из '+K.n+'</small></div><div class="l">алертов ушло аналитику — остальные получили приоритет «низкий» без участия LLM</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+K.found+' <small>из '+K.att+'</small></div><div class="l">атак найдено ('+Math.round(K.found/K.att*100)+' %)</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+K.fp+' <small>из '+K.ben+'</small></div><div class="l">ложных тревог среди обычных событий</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+f2(K.f1)+'</div><div class="l">F1 (интервал '+f2(K.lo)+'–'+f2(K.hi)+'); правило «всё — атака» — '+f2(K.base)+'</div>'));
+  p.appendChild(k);
+
+  var c=el("div","card row2");
+  var h=el("div","llmhead"); h.appendChild(el("h2",null,"Тандем: ML отбирает, LLM объясняет"));
+  var seg=el("div","seg");
+  D.llm.forEach(function(m){ var b=el("button",S.llm===m.id?"on":"",m.name); b.onclick=function(){S.llm=m.id; renderTriage();}; seg.appendChild(b); });
+  h.appendChild(seg); c.appendChild(h);
+  var NF=D.kpi.flag;
+  var t='<table><tr><th>Тандем ML → LLM</th><th class="n">Качество объяснений (0–2)</th><th class="n">Время на 1 алерт</th><th class="n">Цена за 1 алерт</th><th class="n">Цена за '+NF+' алертов</th><th class="n">Распознала ложных тревог</th></tr>';
+  D.llm.forEach(function(m){
+    var a="";
+    t+='<tr class="'+(S.llm===m.id?"on":"")+'"><td>'+m.tandem+' <span class="badge '+(m.where==="облако"?"cloud":"local")+'">'+(m.where==="облако"?"облако":"локально")+'</span></td><td class="n">'+fq(m.q)+'</td><td class="n">'+a+String(m.lat).replace(".",",")+' с</td><td class="n">'+(m.rub?a+fr(m.rub)+' ₽':'бесплатно')+'</td><td class="n">'+(m.rub?a+f2(m.tot)+' ₽':'0 ₽')+'</td><td class="n">'+m.fp_ok+' ложных</td></tr>';
+  });
+  t+='</table>';
+  c.appendChild(el("div","tw",t)); p.appendChild(c);
+
+  var q=el("div","card"); q.appendChild(el("h2",null,"Очередь алертов (отбор — ML, объяснение — LLM)")).style.cssText="font-size:20px;margin:0 0 2px"; q.appendChild(el("div","note","Стрелки ↑ ↓ — следующий алерт")).style.marginBottom="10px";
+  var A=D.alerts, att=function(a){return a.lab!=="benign";}, fl=function(a){return a.pri!=="low";};
+  var F=[["flag","Отобраны",A.filter(fl).length],["hit","Найденные атаки",A.filter(function(a){return fl(a)&&att(a);}).length],
+         ["fp","Ложные тревоги",A.filter(function(a){return fl(a)&&!att(a);}).length],["miss","Пропущенные атаки",A.filter(function(a){return !fl(a)&&att(a);}).length],
+         ["all","Все 200",A.length]];
+  var fb=el("div","filters");
+  F.forEach(function(f){ var b=el("button","chip"+(S.f===f[0]?" on":""),f[1]+" · "+f[2]); b.onclick=function(){S.f=f[0]; S.sel=null; renderTriage();}; fb.appendChild(b); });
+  q.appendChild(fb);
+  var inp=el("input","search"); inp.type="search"; inp.placeholder="Поиск по тексту алерта, журналу или объяснению"; inp.value=S.qs;
+  inp.oninput=function(){ S.qs=inp.value; S.sel=null; var pos=inp.selectionStart; renderTriage();
+    var n=document.querySelector("input.search"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} };
+  q.appendChild(inp);
+  var qs=S.qs.trim().toLowerCase();
+  var hay=function(a){ var t=a.d+" "+a.log+" "+(RU[a.lab]||""); for(var k in a.x){ var x=a.x[k]; t+=" "+x.w+" "+x.y+" "+x.r; } return t.toLowerCase(); };
+  var sel=A.map(function(a,i){return [a,i];}).filter(function(x){var a=x[0];
+    var okf=S.f==="all"||(S.f==="flag"&&fl(a))||(S.f==="hit"&&fl(a)&&att(a))||(S.f==="fp"&&fl(a)&&!att(a))||(S.f==="miss"&&!fl(a)&&att(a));
+    return okf && (!qs || hay(a).indexOf(qs)>=0);});
+  if(qs) q.appendChild(el("div","note","Найдено: "+sel.length)).style.margin="-4px 0 8px";
+  var cnt={critical:0,high:0,medium:0,low:0}; sel.forEach(function(x){cnt[x[0].pri]++;});
+  var pb=el("div","pbar"); ["critical","high","medium","low"].forEach(function(k){ if(cnt[k]) { var d=el("div","pri "+k, PRI_RU[k]+" "+cnt[k]); d.style.flex=cnt[k]; pb.appendChild(d);} });
+  q.appendChild(pb);
+  sel.sort(function(x,y){return PRI_ORD[x[0].pri]-PRI_ORD[y[0].pri] || y[0].p-x[0].p;});
+  S.cur=sel.map(function(x){return x[1];});
+  if(S.sel===null && sel.length) S.sel=sel[0][1];
+  var grid=el("div","queue"+(S.cmp?" wide":"")), list=el("div","list");
+  if(!sel.length) list.appendChild(el("div","it note","Ничего не найдено"));
+  sel.forEach(function(x){ var a=x[0], i=x[1], right=(fl(a)===att(a));
+    var it=el("div","it"+(i===S.sel?" on":""),'<span class="pri '+a.pri+'">'+PRI_RU[a.pri]+'</span><span class="t">'+esc(a.d)+'</span><span class="dot '+(right?"ok":"bad")+'" title="'+(right?"решение совпало с разметкой":"ошибка")+'"></span>');
+    it.onclick=function(){S.sel=i; renderTriage();}; list.appendChild(it); });
+  grid.appendChild(list);
+  var det=el("div","card det"); det.style.background="var(--band)";
+  if(S.sel!==null){
+    var a=A[S.sel], right=(fl(a)===att(a));
+    det.appendChild(el("h3",null,esc(a.d)));
+    det.appendChild(el("div","tags",'<span class="pri '+a.pri+'">'+PRI_RU[a.pri]+'</span><span class="tag '+(right?"ok":"bad")+'">'+(att(a)?"атака: "+RU[a.lab]:"обычное событие")+(right?" · верно":" · ошибка модели")+'</span><span class="tag">сеть '+a.sc+'</span>'));
+    det.appendChild(el("div","probs",'<span>вероятность атаки по '+D.best+' <b>'+f2(a.p)+'</b> '+(a.p>=0.5?"≥":"&lt;")+' 0,5</span>'));
+    var x=a.x[S.llm];
+    if(x){
+      var cb=el("button","chip"+(S.cmp?" on":""), S.cmp?"Показать одну модель":"Сравнить все модели"); cb.style.margin="4px 0 2px";
+      cb.onclick=function(){S.cmp=!S.cmp; renderTriage();}; det.appendChild(cb);
+      if(!S.cmp){
+        var m=D.llm.filter(function(z){return z.id===S.llm;})[0];
+        det.appendChild(el("div","note","Тандем: "+D.best+" → "+m.name+(x.sig==="нет"?" · отметила: признаков атаки в тексте нет":"")));
+        det.appendChild(el("div","blk","<b>Что произошло</b>"+hl(x.w)));
+        det.appendChild(el("div","blk","<b>Почему подозрительно</b>"+hl(x.y)));
+        det.appendChild(el("div","blk","<b>Что делать</b>"+hl(x.r)));
+      } else {
+        var cg=el("div","cmp3");
+        D.llm.forEach(function(m){ var z=a.x[m.id]; var col=el("div","cmpc"); if(!z){ col.appendChild(el("div","cmph",m.name)); col.appendChild(el("div","note","объяснение ещё не получено")); cg.appendChild(col); return; }
+          col.appendChild(el("div","cmph",m.name+(m.q==null?'':' <span class="note">· '+f2(m.q)+'</span>')));
+          col.appendChild(el("div","tags",'<span class="pri '+z.pri+'">'+PRI_RU[z.pri]+'</span>'+(z.sig==="нет"?'<span class="tag">признаков нет</span>':'')));
+          col.appendChild(el("div","blk","<b>Что произошло</b>"+hl(z.w)));
+          col.appendChild(el("div","blk","<b>Почему</b>"+hl(z.y)));
+          col.appendChild(el("div","blk","<b>Что делать</b>"+hl(z.r)));
+          cg.appendChild(col); });
+        det.appendChild(cg);
+      }
+    } else if(fl(a)) {
+      det.appendChild(el("div","blk note","ML отобрала этот алерт, но объяснение выбранной LLM для него ещё не получено."));
+    } else {
+      det.appendChild(el("div","blk note","ML не отобрала этот алерт — он получил приоритет «низкий» и в LLM не отправлялся."));
+    }
+    det.appendChild(el("div","blk","<b>Журнал</b><div class=\"log\">"+hl(a.log)+"</div>"));
+  }
+  grid.appendChild(det); q.appendChild(grid);
+  p.appendChild(q);
+}
+
+/* ---------- вкладка 2: как мы к этому пришли ---------- */
+function ciChart(rows, opts){
+  var B=D.base, w=600, x=function(v){return (v-0.3)/(1-0.3)*w;};
+  var box=el("div","chart");
+  var ax=el("div","axis",'<div></div><div><span>0,3</span><span>0,4</span><span>0,5</span><span>0,6</span><span>0,7</span><span>0,8</span><span>0,9</span><span>1,0</span></div><div></div>'); ax.children[1].style.cssText="display:flex;justify-content:space-between";
+  rows.forEach(function(r){
+    var col=r.hl?"var(--acc)":"var(--grey)";
+    var svg='<svg viewBox="0 0 '+w+' 30" preserveAspectRatio="none">'+
+      '<rect x="'+x(B.lo)+'" y="0" width="'+(x(B.hi)-x(B.lo))+'" height="30" fill="var(--band)"/>'+
+      '<line x1="'+x(B.f1)+'" x2="'+x(B.f1)+'" y1="0" y2="30" stroke="var(--faint)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>'+
+      '<line x1="'+x(r.lo)+'" x2="'+x(r.hi)+'" y1="15" y2="15" stroke="'+col+'" stroke-width="2" vector-effect="non-scaling-stroke"/>'+
+      '<rect x="'+(x(r.f1)-5)+'" y="9" width="10" height="12" rx="3" fill="'+col+'"/></svg>';
+    var rr=el("div","r",'<div class="nm">'+r.name+'<small>'+r.sub+'</small></div><div>'+svg+'</div><div class="val" style="color:'+(r.hl?"var(--acc)":"var(--ink)")+'">'+f2(r.f1)+'</div>');
+    if(opts&&opts.notes) rr.appendChild(el("div","ex","Найдено "+r.found+" из 87, ложных "+r.fp+". "+r.note));
+    box.appendChild(rr);
+  });
+  box.appendChild(ax);
+  box.appendChild(el("div","legend",'<span><i style="background:var(--acc)"></i>итоговая модель</span><span><i style="background:var(--grey)"></i>остальные</span><span><i style="background:var(--band)"></i>разброс правила «всё — атака» (F1 '+f2(B.f1)+')</span><span>линия у точки — 95 % доверительный интервал</span>'));
+  return box;
+}
+function renderStory(){
+  var K=D.kpi, p=document.getElementById("p2"); p.innerHTML="";
+  p.appendChild(el("div","part",'<span class="pn">1</span>Машинное обучение (ML) <small>решает, атака ли алерт</small>'));
+  var s1=el("div","card sec");
+  s1.appendChild(el("h2",null,"Пять моделей машинного обучения"));
+  s1.appendChild(el("p","lead","Одинаковые признаки, порог 0,5, каждая модель оценивается на сетях, позднюю часть которых не видела при обучении. F1 на выборке 1 (200 алертов, 87 атак). Если интервал заходит в серую полосу, модель не доказала, что лучше правила «считать атакой всё». Итоговая модель выбрана заранее заданным правилом — лучшая AP на всём потоке."));
+  s1.appendChild(ciChart(D.ml,{notes:true}));
+  var t='<table style="margin-top:12px"><tr><th>Модель</th><th class="n">F1 выборка 2</th><th class="n">F1 весь поток</th><th class="n">ROC-AUC поток</th><th class="n">AP поток</th><th class="n">Эпизоды атак</th><th class="n">Тревог в час</th></tr>';
+  D.ml.forEach(function(r){ t+='<tr class="'+(r.hl?"hl":"")+'"><td>'+r.name+'</td><td class="n">'+f2(r.f2)+'</td><td class="n">'+f2(r.sf1)+'</td><td class="n">'+f2(r.auc)+'</td><td class="n">'+f2(r.ap)+'</td><td class="n">'+r.ep+'</td><td class="n">'+String(r.ph).replace(".",",")+'</td></tr>'; });
+  t+='<tr><td class="note">правило «всё — атака»</td><td class="n note">'+f2(K.base2)+'</td><td class="n note">'+f2(K.stream_base)+'</td><td></td><td></td><td></td><td class="n note">'+Math.round(K.per_hour_all)+'</td></tr></table>';
+  s1.appendChild(el("div","tw",t));
+  p.appendChild(s1);
+
+  var k=el("div","kpis");
+  k.appendChild(el("div","card kpi",'<div class="v">'+f2(K.s2)+'</div><div class="l">F1 итоговой модели на второй, независимой выборке</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+f2(K.stream)+' <small>против '+f2(K.stream_base)+'</small></div><div class="l">F1 на всём тестовом потоке (156 592 алерта); различимых по тексту атак найдено '+K.dist+' %</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+K.ep+'</div><div class="l">эпизодов атак замечено на потоке, медианная задержка '+String(K.delay).replace(".",",")+' с</div>'));
+  k.appendChild(el("div","card kpi",'<div class="v">'+String(Math.round(K.per_hour))+' <small>вместо '+String(Math.round(K.per_hour_all))+'</small></div><div class="l">алертов в час уходит аналитику</div>'));
+  p.appendChild(k);
+
+  var s4=el("div","card sec");
+  s4.appendChild(el("h2",null,'Какие признаки помогают итоговой модели <span class="mbadge">'+D.best+'</span>'));
+  s4.appendChild(el("p","lead","Одна и та же модель — "+D.best+" — обучена с разными наборами признаков; меняются только признаки. Текст в одиночку на всём потоке почти не отличает атаку от фона; основной вклад дают всплески и общая активность источника. Название сети и IP-адреса — подсказки, которых в новой организации не будет: название сети в итоговую модель не входит, строка со скрытыми IP-адресами показывает честную нижнюю оценку."));
+  var ta='<table><tr><th>Признаки модели '+D.best+'</th><th class="n">F1 выборка 1</th><th class="n">F1 выборка 2</th><th class="n">F1 весь поток</th><th class="n">ROC-AUC поток</th></tr>';
+  D.abl.forEach(function(r){ ta+='<tr class="'+(r.main?"hl":"")+'"><td>'+r.name+'</td><td class="n">'+f2(r.f1)+'</td><td class="n">'+f2(r.f2)+'</td><td class="n">'+f2(r.sf1)+'</td><td class="n">'+f2(r.auc)+'</td></tr>'; });
+  s4.appendChild(el("div","tw",ta+'</table>'));
+  p.appendChild(s4);
+
+  var s5=el("div","card sec");
+  s5.appendChild(el("h2",null,"Качество итоговой модели по сетям"));
+  s5.appendChild(el("p","lead","ROC-AUC итоговой модели на поздней части каждой сети: 0,5 — случайное угадывание, 1 — идеальное ранжирование атак выше фона."));
+  var w=600, bx=el("div","chart");
+  D.sc.forEach(function(r){ var x=(r.ROC_AUC-0.5)/0.5*w; var col=r.ROC_AUC>=0.9?"var(--ok)":(r.ROC_AUC>=0.7?"var(--grey)":"var(--bad)");
+    bx.appendChild(el("div","r",'<div class="nm">'+r.scenario+'<small>атак в тесте: '+nn(r.attacks)+'</small></div><div><svg viewBox="0 0 '+w+' 30" preserveAspectRatio="none"><rect x="0" y="9" width="'+Math.max(2,x)+'" height="12" rx="3" fill="'+col+'"/></svg></div><div class="val">'+f2(r.ROC_AUC)+'</div>')); });
+  bx.appendChild(el("div","axis",'<div></div><div><span>0,5</span><span>0,6</span><span>0,7</span><span>0,8</span><span>0,9</span><span>1,0</span></div><div></div>'));
+  s5.appendChild(bx);
+  p.appendChild(s5);
+  p.appendChild(el("div","part llm",'<span class="pn">2</span>Языковые модели (LLM) <small>объясняют алерты; здесь — что будет, если LLM решает сама</small>'));
+
+  var s2=el("div","card sec");
+  s2.appendChild(el("h2",null,"LLM в одиночку против ML: почему решает ML"));
+  s2.appendChild(el("p","lead","Языковые модели (LLM) сами решали, атака ли алерт, на тех же 200 алертах и с тем же промптом. Модель машинного обучения точнее, работает за доли миллисекунды и бесплатна; языковой модели оставлено то, что она делает лучше, — объяснение."));
+  s2.appendChild(ciChart(D.vs));
+  p.appendChild(s2);
+
+  var go=D.llm.filter(function(z){return z.id==="o";})[0];
+  var sl=el("div","card sec");
+  sl.appendChild(el("h2",null,"Можно ли запустить объясняющую LLM у себя"));
+  sl.appendChild(el("p","lead","gpt-oss — открытая модель OpenAI: её веса можно скачать, лицензия Apache 2.0, платить за саму модель не нужно. Платим только за оборудование и электричество, а данные алертов не уходят во внешний сервис."));
+  var tl='<table><tr><th>Способ запуска</th><th>Что нужно</th><th>Плата за модель</th><th>Где обрабатываются данные</th></tr>'
+    +'<tr><td>Облако (Polza AI) — так проверяли в работе</td><td>Интернет и ключ API</td><td>'+(go?fr(go.rub)+' ₽ за объяснение':'—')+'</td><td>Во внешнем сервисе</td></tr>'
+    +'<tr><td>Локально, gpt-oss-20b</td><td>Память 16 ГБ</td><td>Нет, веса бесплатны</td><td>В организации</td></tr>'
+    +'<tr><td>Локально, gpt-oss-120b</td><td>Одна видеокарта на 80 ГБ</td><td>Нет, веса бесплатны</td><td>В организации</td></tr></table>';
+  sl.appendChild(el("div","tw",tl));
+  sl.appendChild(el("div","note","Требования — по данным разработчиков (блог Ollama, 5 августа 2025). В работе проверена облачная gpt-oss-120b; локальная gpt-oss-20b не запускалась."));
+  p.appendChild(sl);
+}
+
+document.addEventListener("keydown",function(e){
+  if(document.getElementById("p1").hidden) return;
+  var tg=e.target.tagName; if(tg==="INPUT"||tg==="TEXTAREA") return;
+  if(e.key!=="ArrowDown"&&e.key!=="ArrowUp") return;
+  var i=S.cur.indexOf(S.sel); if(i<0) return; e.preventDefault();
+  i=Math.max(0,Math.min(S.cur.length-1,i+(e.key==="ArrowDown"?1:-1))); S.sel=S.cur[i]; renderTriage();
+  var on=document.querySelector(".it.on"); if(on) on.scrollIntoView({block:"nearest"});
+});
+document.getElementById("sub").textContent = "Тандем: "+D.best+" отбирает подозрительные алерты, большая языковая модель (LLM) объясняет их аналитику · 200 алертов AIT-ADS"; renderTriage(); renderStory();
+try{ var t0=localStorage.getItem("tab"); if(t0==="2") tab(2); }catch(e){}
+</script>
+</body>
+</html>
